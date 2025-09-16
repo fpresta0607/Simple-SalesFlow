@@ -1,0 +1,44 @@
+{
+  "name": "simple-salesflow",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "next lint",
+    "prisma:generate": "prisma generate",
+    "prisma:push": "prisma db push",
+    "postinstall": "prisma generate",
+    "gen:secret": "node scripts/generate-nextauth-secret.js",
+    "gen:secret:write": "node scripts/generate-nextauth-secret.js --write",
+    "gen:secret:write:force": "node scripts/generate-nextauth-secret.js --write --force"
+  },
+  "dependencies": {
+    "@next-auth/prisma-adapter": "^1.0.7",
+    "@prisma/client": "^5.18.0",
+    "autoprefixer": "^10.4.19",
+    "clsx": "^2.1.1",
+    "lucide-react": "^0.453.0",
+    "next": "14.2.10",
+    "next-auth": "^4.24.7",
+    "openai": "^4.56.0",
+    "postcss": "^8.4.41",
+    "react": "18.3.1",
+    "react-dom": "18.3.1",
+    "resend": "^4.0.0",
+    "tailwind-merge": "^2.5.2",
+    "tailwindcss": "^3.4.10",
+    "xlsx": "^0.18.5",
+    "zod": "^3.23.8"
+  },
+  "devDependencies": {
+    "@types/node": "20.12.12",
+    "@types/react": "18.3.3",
+    "@types/react-dom": "18.3.0",
+    "eslint": "^8.57.0",
+    "eslint-config-next": "14.2.10",
+    "prisma": "^5.18.0",
+    "typescript": "5.4.5"
+  }
+}

@@ -1,0 +1,30 @@
+# Dependencies
+node_modules/
+
+# Next.js
+.next/
+.vercel/
+out/
+
+# Env files (keep example)
+.env
+.env.*
+!.env.local.example
+
+# Logs
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# OS
+.DS_Store
+
+# DB
+dev.db
+*.sqlite
+*.sqlite-journal
+
+# Misc
+.turbo/
+coverage/

@@ -1,0 +1,102 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id            String   @id @default(cuid())
+  name          String?
+  email         String?  @unique
+  emailVerified DateTime?
+  image         String?
+
+  accounts Account[]
+  sessions Session[]
+  drafts   Draft[]
+  emailLogs EmailLog[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Account {
+  id                String  @id @default(cuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String?  @map("refresh_token")
+  access_token      String?  @map("access_token")
+  expires_at        Int?     @map("expires_at")
+  token_type        String?  @map("token_type")
+  scope             String?
+  id_token          String?  @map("id_token")
+  session_state     String?  @map("session_state")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
+}
+
+model Draft {
+  id        String   @id @default(cuid())
+  userId    String
+  contactEmail String
+  contactFirstName String?
+  contactLastName  String?
+  contactTitle     String?
+  accountName      String?
+  mailingCity      String?
+  mailingStreet    String?
+  mailingZip       String?
+  businessPhone    String?
+  mobileNumber     String?
+
+  emailType  String
+  instructions String?
+  subject    String
+  body       String
+  status     String   @default("draft") // draft | sent | failed
+  sentAt     DateTime?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  logs EmailLog[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model EmailLog {
+  id        String   @id @default(cuid())
+  userId    String
+  draftId   String?
+  toEmail   String
+  subject   String
+  status    String // sent | failed
+  error     String?
+  createdAt DateTime @default(now())
+
+  user  User  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  draft Draft? @relation(fields: [draftId], references: [id])
+}
