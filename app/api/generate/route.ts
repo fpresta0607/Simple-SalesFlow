@@ -5,74 +5,154 @@ import { EmailType } from "@/types/contacts";
 import OpenAI from "openai";
 
 export async function POST(req: NextRequest) {
-  const session = await getSession();
-  if (!session?.user?.email || !session.user.id) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
-
-  const body = await req.json();
-  const { contacts, emailType, instructions } = body as {
-    contacts: any[];
-    emailType: EmailType;
-    instructions?: string;
-  };
-
-  if (!contacts?.length) {
-    return NextResponse.json({ error: "No contacts provided" }, { status: 400 });
-  }
-
-  const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
-
-  const results: any[] = [];
-  for (const c of contacts) {
-    const prompt = `You are an expert SDR. Write a short, personalized cold email. Style: ${emailType}. Return strict JSON with keys subject and body only.
-Contact:
-First Name: ${c.firstName || ""}
-Last Name: ${c.lastName || ""}
-Title: ${c.title || ""}
-Company: ${c.accountName || ""}
-City: ${c.mailingCity || ""}
-Street: ${c.mailingStreet || ""}
-Zip: ${c.mailingZip || ""}
-Business Phone: ${c.businessPhone || ""}
-Mobile: ${c.mobileNumber || ""}
-Email: ${c.email}
-${instructions ? `Extra instructions: ${instructions}` : ""}`;
-
-    const resp = await openai.responses.create({
-      model: "gpt-4o-mini",
-      input: prompt,
-    });
-
-  const text = (resp as any).output_text || "{}";
-    let json: { subject?: string; body?: string } = {};
-    try {
-      json = JSON.parse(text);
-    } catch {
-      json = { subject: "", body: text };
+  try {
+    const session = await getSession();
+    if (!session?.user?.email || !session.user.id) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const draft = await prisma.draft.create({
-      data: {
-        userId: session.user.id,
-        contactEmail: c.email,
-        contactFirstName: c.firstName,
-        contactLastName: c.lastName,
-        contactTitle: c.title,
-        accountName: c.accountName,
-        mailingCity: c.mailingCity,
-        mailingStreet: c.mailingStreet,
-        mailingZip: c.mailingZip,
-        businessPhone: c.businessPhone,
-        mobileNumber: c.mobileNumber,
-        emailType,
-        instructions,
-        subject: json.subject || "",
-        body: json.body || "",
-      },
-    });
-    results.push(draft);
-  }
+    const body = await req.json();
+    const { contacts, emailType, instructions, footer } = body as {
+      contacts: any[];
+      emailType: EmailType;
+      instructions?: string;
+      footer?: string;
+    };
 
-  return NextResponse.json({ drafts: results });
+    if (!contacts?.length) {
+      return NextResponse.json({ error: "No contacts provided" }, { status: 400 });
+    }
+
+    const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+
+    const toStrOrUndef = (v: any): string | undefined => {
+      if (v === null || v === undefined) return undefined;
+      const s = String(v).trim();
+      return s.length ? s : undefined;
+    };
+
+    function tryParseJsonBlock(text: string): { subject?: string; body?: string } | null {
+      if (!text) return null;
+      // Try direct JSON
+      try { return JSON.parse(text); } catch {}
+      // Try code-fenced JSON
+      const fence = text.match(/```(?:json)?\s*([\s\S]*?)```/i);
+      if (fence && fence[1]) {
+        try { return JSON.parse(fence[1]); } catch {}
+      }
+      // Try to find a JSON object substring
+      const braceStart = text.indexOf("{");
+      const braceEnd = text.lastIndexOf("}");
+      if (braceStart !== -1 && braceEnd !== -1 && braceEnd > braceStart) {
+        const slice = text.slice(braceStart, braceEnd + 1);
+        try { return JSON.parse(slice); } catch {}
+      }
+      return null;
+    }
+
+    function deriveSubjectFromBody(body: string | undefined): string {
+      if (!body) return "Quick note";
+      const clean = body.replace(/```[\s\S]*?```/g, "").trim();
+      const lines = clean.split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
+      let first = lines[0] || clean.slice(0, 140);
+      // Remove leading Subject: if present
+      first = first.replace(/^subject:\s*/i, "");
+      // Clamp length
+      if (first.length > 120) first = first.slice(0, 117).trimEnd() + "...";
+      if (!first) first = "Quick note";
+      return first;
+    }
+
+    const results: any[] = [];
+    for (const c of contacts) {
+      const prompt = `You are an expert SDR. Write a short, personalized cold email. Style: ${emailType}.
+Return a strict single-line JSON object ONLY, no code fences, no extra text. Keys: subject, body.
+Example: {"subject":"...","body":"..."}
+Contact:
+First Name: ${toStrOrUndef(c.firstName) || ""}
+Last Name: ${toStrOrUndef(c.lastName) || ""}
+Title: ${toStrOrUndef(c.title) || ""}
+Company: ${toStrOrUndef(c.accountName) || ""}
+City: ${toStrOrUndef(c.mailingCity) || ""}
+Street: ${toStrOrUndef(c.mailingStreet) || ""}
+Zip: ${toStrOrUndef(c.mailingZip) || ""}
+Business Phone: ${toStrOrUndef(c.businessPhone) || ""}
+Mobile: ${toStrOrUndef(c.mobileNumber) || ""}
+Email: ${c.email}
+${instructions ? `Extra instructions: ${instructions}` : ""}`;
+      try {
+        const resp = await openai.responses.create({
+          model: "gpt-4o-mini",
+          input: prompt,
+        });
+
+        const text = (resp as any).output_text || "{}";
+        let json = tryParseJsonBlock(text) || { subject: "", body: text };
+        if (!json.subject) json.subject = deriveSubjectFromBody(json.body);
+
+        // Append footer if provided; if it looks like HTML (<...>), keep as-is; otherwise append as plain text separated by two newlines.
+        const withFooter = (content: string) => {
+          if (!footer) return content;
+          const isHtml = /<[^>]+>/.test(footer);
+          if (isHtml) {
+            // Wrap body as HTML; if body seems plain text, convert newlines to <br/>
+            const bodyLooksHtml = /<[^>]+>/.test(content);
+            const htmlBody = bodyLooksHtml ? content : content.replace(/\n/g, "<br/>");
+            return `${htmlBody}<br/><br/>${footer}`;
+          } else {
+            return `${content}\n\n${footer}`;
+          }
+        };
+
+        const draft = await prisma.draft.create({
+          data: {
+            userId: session.user.id,
+            contactEmail: c.email,
+            contactFirstName: toStrOrUndef(c.firstName),
+            contactLastName: toStrOrUndef(c.lastName),
+            contactTitle: toStrOrUndef(c.title),
+            accountName: toStrOrUndef(c.accountName),
+            mailingCity: toStrOrUndef(c.mailingCity),
+            mailingStreet: toStrOrUndef(c.mailingStreet),
+            mailingZip: toStrOrUndef(c.mailingZip),
+            businessPhone: toStrOrUndef(c.businessPhone),
+            mobileNumber: toStrOrUndef(c.mobileNumber),
+            emailType,
+            instructions,
+            subject: json.subject || deriveSubjectFromBody(json.body),
+            body: withFooter(json.body || ""),
+          },
+        });
+        results.push(draft);
+      } catch (err: any) {
+        // If generation fails for this contact, create a placeholder draft with error status
+        const draft = await prisma.draft.create({
+          data: {
+            userId: session.user.id,
+            contactEmail: c.email,
+            contactFirstName: toStrOrUndef(c.firstName),
+            contactLastName: toStrOrUndef(c.lastName),
+            contactTitle: toStrOrUndef(c.title),
+            accountName: toStrOrUndef(c.accountName),
+            mailingCity: toStrOrUndef(c.mailingCity),
+            mailingStreet: toStrOrUndef(c.mailingStreet),
+            mailingZip: toStrOrUndef(c.mailingZip),
+            businessPhone: toStrOrUndef(c.businessPhone),
+            mobileNumber: toStrOrUndef(c.mobileNumber),
+            emailType,
+            instructions,
+            subject: "",
+            body: `Generation failed: ${err?.message || "unknown error"}`,
+            status: "failed",
+          },
+        });
+        results.push(draft);
+      }
+    }
+
+    return NextResponse.json({ drafts: results });
+  } catch (e: any) {
+    console.error("/api/generate error", e);
+    return NextResponse.json({ error: e?.message || "Internal server error" }, { status: 500 });
+  }
 }

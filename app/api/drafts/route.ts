@@ -7,6 +7,12 @@ export async function GET() {
   // @ts-ignore augment user id via callback
   const userId = session?.user?.id as string | undefined;
   if (!userId) return NextResponse.json({ drafts: [] });
-  const drafts = await prisma.draft.findMany({ where: { userId }, orderBy: { createdAt: "desc" } });
+  const drafts = await prisma.draft.findMany({
+    where: {
+      userId,
+      NOT: { status: "sent" },
+    },
+    orderBy: { createdAt: "desc" },
+  });
   return NextResponse.json({ drafts });
 }

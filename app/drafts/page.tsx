@@ -46,23 +46,41 @@ export default function DraftsPage() {
     if (ids.length === 0) return alert("Select at least one draft");
     const res = await fetch("/api/send", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ draftIds: ids }) });
     const data = await res.json();
-    alert("Send results: " + JSON.stringify(data.results, null, 2));
-    // Clear selection after sending and refresh drafts
+    // Clear selection and go to Sent page with summary
     setSelected({});
-    fetchDrafts();
+    try {
+      // Clear contact upload cache and any legacy outlook footer keys
+      localStorage.removeItem("uploadedContacts");
+      localStorage.removeItem("outlookFooter");
+      const fm = localStorage.getItem("footerMode");
+      if (fm === "outlook") localStorage.setItem("footerMode", "none");
+    } catch {}
+    const encoded = encodeURIComponent(JSON.stringify(data.results || []));
+    window.location.href = `/sent?results=${encoded}`;
   }
 
   function clearSendList() {
     setSelected({});
   }
 
-  function removeFromSendList(id: string) {
+  async function removeFromSendList(id: string) {
+    // If draft is selected, deselect; also delete the draft from server and local list
     setSelected((s) => {
-      if (!s[id]) return s;
       const next = { ...s };
-      delete next[id];
+      if (next[id]) delete next[id];
       return next;
     });
+    try {
+      const res = await fetch(`/api/drafts/${id}`, { method: "DELETE" });
+      if (!res.ok) {
+        const t = await res.text();
+        alert(`Failed to delete draft: ${t}`);
+        return;
+      }
+      setDrafts((ds) => ds.filter((d) => d.id !== id));
+    } catch (e: any) {
+      alert(`Failed to delete draft: ${e?.message || e}`);
+    }
   }
 
   return (
@@ -112,7 +130,7 @@ export default function DraftsPage() {
                 </td>
                 <td className="p-2 align-top">{d.status}</td>
                 <td className="p-2 align-top"><button onClick={() => saveDraft(d)} className="rounded bg-gray-800 px-3 py-1 text-white">Save</button></td>
-                <td className="p-2 align-top"><button onClick={() => removeFromSendList(d.id)} className="rounded bg-amber-600 px-3 py-1 text-white hover:bg-amber-700 disabled:opacity-50" disabled={!selected[d.id]}>Remove</button></td>
+                <td className="p-2 align-top"><button onClick={() => removeFromSendList(d.id)} className="rounded bg-amber-600 px-3 py-1 text-white hover:bg-amber-700">Remove</button></td>
               </tr>
             ))}
           </tbody>

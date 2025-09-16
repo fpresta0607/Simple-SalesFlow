@@ -31,7 +31,7 @@ export default function UploadPage() {
 
   return (
     <main className="space-y-6">
-      <h2 className="text-lg font-semibold">Upload contacts</h2>
+      <h2 className="text-lg font-semibold">Upload your contact list</h2>
       <div
         onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
         onDragLeave={() => setDragOver(false)}
@@ -44,6 +44,9 @@ export default function UploadPage() {
             Browse
             <input type="file" accept=".csv,.xlsx,.xls" className="hidden" onChange={onInput} />
           </label>
+          <div className="mt-2 text-xs text-gray-600">
+            <a className="underline" href="/sample-template.csv">Download sample template</a>
+          </div>
         </div>
       </div>
       {contacts.length > 0 && (

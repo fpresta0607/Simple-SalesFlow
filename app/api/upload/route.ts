@@ -34,9 +34,9 @@ export async function POST(req: NextRequest) {
       email: (obj["email"] || obj["email address"] || obj["emailaddress"] || "").toString(),
       mailingCity: obj["mailing city"] || obj["city"],
       mailingStreet: obj["mailing street"] || obj["street"],
-      mailingZip: obj["mailing zip/postal code"] || obj["zip"] || obj["postal code"],
-      businessPhone: obj["business phone"] || obj["phone"],
-      mobileNumber: obj["mobile number"] || obj["mobile"],
+      mailingZip: (obj["mailing zip/postal code"] || obj["zip"] || obj["postal code"])?.toString(),
+      businessPhone: (obj["business phone"] || obj["phone"])?.toString(),
+      mobileNumber: (obj["mobile number"] || obj["mobile"])?.toString(),
     } as Contact;
   }).filter((c) => c.email);
 

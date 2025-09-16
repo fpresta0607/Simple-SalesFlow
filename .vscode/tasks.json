@@ -19,6 +19,30 @@
 				"$tsc"
 			],
 			"group": "build"
+		},
+		{
+			"label": "Prisma: generate and migrate ext_expires_in",
+			"type": "shell",
+			"command": "npx prisma generate && npx prisma migrate dev -n add_ext_expires_in_to_account",
+			"isBackground": false,
+			"problemMatcher": [
+				"$eslint-stylish"
+			],
+			"group": "build"
+		},
+		{
+			"label": "Prisma: generate",
+			"type": "shell",
+			"command": "npx prisma generate",
+			"isBackground": false,
+			"group": "build"
+		},
+		{
+			"label": "Prisma: migrate dev",
+			"type": "shell",
+			"command": "npx prisma migrate dev -n add_ext_expires_in_to_account",
+			"isBackground": false,
+			"group": "build"
 		}
 	]
 }
