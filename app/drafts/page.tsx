@@ -16,6 +16,7 @@ type Draft = {
 export default function DraftsPage() {
   const [drafts, setDrafts] = useState<Draft[]>([]);
   const [selected, setSelected] = useState<Record<string, boolean>>({});
+  const selectedCount = drafts.reduce((acc, d) => acc + (selected[d.id] ? 1 : 0), 0);
 
   async function fetchDrafts() {
     const res = await fetch("/api/drafts");
@@ -46,12 +47,33 @@ export default function DraftsPage() {
     const res = await fetch("/api/send", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ draftIds: ids }) });
     const data = await res.json();
     alert("Send results: " + JSON.stringify(data.results, null, 2));
+    // Clear selection after sending and refresh drafts
+    setSelected({});
     fetchDrafts();
+  }
+
+  function clearSendList() {
+    setSelected({});
+  }
+
+  function removeFromSendList(id: string) {
+    setSelected((s) => {
+      if (!s[id]) return s;
+      const next = { ...s };
+      delete next[id];
+      return next;
+    });
   }
 
   return (
     <main className="space-y-6">
       <h2 className="text-lg font-semibold">Review drafts</h2>
+      <div className="flex items-center justify-between">
+        <div className="text-sm text-gray-700">Selected: <span className="font-medium">{selectedCount}</span></div>
+        <div className="space-x-2">
+          <button onClick={clearSendList} className="rounded bg-red-600 px-3 py-1.5 text-white hover:bg-red-700">Clear Send List</button>
+        </div>
+      </div>
       <div className="overflow-auto rounded border bg-white">
         <table className="min-w-full text-sm">
           <thead className="bg-gray-50">
@@ -67,6 +89,7 @@ export default function DraftsPage() {
               <th className="p-2 text-left">Body</th>
               <th className="p-2 text-left">Status</th>
               <th className="p-2 text-left">Save</th>
+              <th className="p-2 text-left">Remove</th>
             </tr>
           </thead>
           <tbody>
@@ -89,6 +112,7 @@ export default function DraftsPage() {
                 </td>
                 <td className="p-2 align-top">{d.status}</td>
                 <td className="p-2 align-top"><button onClick={() => saveDraft(d)} className="rounded bg-gray-800 px-3 py-1 text-white">Save</button></td>
+                <td className="p-2 align-top"><button onClick={() => removeFromSendList(d.id)} className="rounded bg-amber-600 px-3 py-1 text-white hover:bg-amber-700 disabled:opacity-50" disabled={!selected[d.id]}>Remove</button></td>
               </tr>
             ))}
           </tbody>
