@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 type Draft = {
   id: string;
@@ -16,15 +16,36 @@ type Draft = {
 export default function DraftsPage() {
   const [drafts, setDrafts] = useState<Draft[]>([]);
   const [selected, setSelected] = useState<Record<string, boolean>>({});
+  const [query, setQuery] = useState("");
+  const [loading, setLoading] = useState(true);
+  const [sending, setSending] = useState(false);
   const selectedCount = drafts.reduce((acc, d) => acc + (selected[d.id] ? 1 : 0), 0);
 
   async function fetchDrafts() {
-    const res = await fetch("/api/drafts");
-    const data = await res.json();
-    setDrafts(data.drafts || []);
+    try {
+      const res = await fetch("/api/drafts");
+      const data = await res.json();
+      setDrafts(data.drafts || []);
+    } finally {
+      setLoading(false);
+    }
   }
 
   useEffect(() => { fetchDrafts(); }, []);
+
+  const filtered = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    if (!q) return drafts;
+    return drafts.filter((d) =>
+      (d.contactFirstName || "").toLowerCase().includes(q) ||
+      (d.contactLastName || "").toLowerCase().includes(q) ||
+      (d.contactTitle || "").toLowerCase().includes(q) ||
+      (d.accountName || "").toLowerCase().includes(q) ||
+      d.contactEmail.toLowerCase().includes(q) ||
+      d.subject.toLowerCase().includes(q) ||
+      d.body.toLowerCase().includes(q)
+    );
+  }, [drafts, query]);
 
   function toggleAll(e: React.ChangeEvent<HTMLInputElement>) {
     const checked = e.target.checked;
@@ -44,6 +65,7 @@ export default function DraftsPage() {
   async function sendSelected() {
     const ids = drafts.filter((d: Draft) => selected[d.id]).map((d: Draft) => d.id);
     if (ids.length === 0) return alert("Select at least one draft");
+    setSending(true);
     const res = await fetch("/api/send", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ draftIds: ids }) });
     const data = await res.json();
     // Clear selection and go to Sent page with summary
@@ -84,59 +106,96 @@ export default function DraftsPage() {
   }
 
   return (
-    <main className="space-y-6">
-      <h2 className="text-lg font-semibold">Review drafts</h2>
-      <div className="flex items-center justify-between">
-        <div className="text-sm text-gray-700">Selected: <span className="font-medium">{selectedCount}</span></div>
-        <div className="space-x-2">
-          <button onClick={clearSendList} className="rounded bg-red-600 px-3 py-1.5 text-white hover:bg-red-700">Clear Send List</button>
+    <main className="mx-auto w-full max-w-none space-y-4 px-1 pb-6 lg:px-2">
+      <h2 className="pt-2 text-xl font-semibold tracking-tight">Review drafts</h2>
+      <p className="text-sm text-slate-500">Generated drafts. Edit before sending.</p>
+
+      {/* Toolbar */}
+      <div className="sticky top-0 z-10 -mx-1 mb-2 bg-[#f5f5f7]/80 px-1 py-2 backdrop-blur supports-[backdrop-filter]:bg-[#f5f5f7]/60 lg:-mx-2 lg:px-2">
+        <div className="flex items-center gap-2">
+          <div className="relative flex-1">
+            <input
+              type="search"
+              placeholder="Search"
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              className="w-full rounded-full border border-slate-200 bg-white px-4 py-2 text-sm shadow-sm focus:border-blue-500"
+            />
+          </div>
+          <button onClick={() => {
+            // Select all visible
+            const next: Record<string, boolean> = {};
+            filtered.forEach((d) => { next[d.id] = true; });
+            setSelected(next);
+          }} className="rounded-full bg-slate-900 px-3 py-2 text-xs font-medium text-white shadow active:scale-[.98]">Select All</button>
+          <button onClick={clearSendList} className="rounded-full bg-slate-200 px-3 py-2 text-xs font-medium text-slate-900 shadow active:scale-[.98]">Clear</button>
+          <button disabled={sending} onClick={sendSelected} className={`rounded-full px-3 py-2 text-xs font-medium text-white shadow active:scale-[.98] ${sending ? "bg-blue-400" : "bg-blue-600"}`}>
+            {sending ? "Sending…" : `Send ${selectedCount > 0 ? `${selectedCount} Selected` : "Selected"}`}
+          </button>
         </div>
       </div>
-      <div className="overflow-auto rounded border bg-white">
-        <table className="min-w-full text-sm">
-          <thead className="bg-gray-50">
-            <tr>
-              <th className="p-2">
-                <label className="sr-only" htmlFor="selectAll">Select All</label>
-                <input id="selectAll" aria-label="Select All" type="checkbox" onChange={toggleAll} />
-              </th>
-              <th className="p-2 text-left">Contact Name</th>
-              <th className="p-2 text-left">Title</th>
-              <th className="p-2 text-left">Company</th>
-              <th className="p-2 text-left">Subject</th>
-              <th className="p-2 text-left">Body</th>
-              <th className="p-2 text-left">Status</th>
-              <th className="p-2 text-left">Save</th>
-              <th className="p-2 text-left">Remove</th>
-            </tr>
-          </thead>
-          <tbody>
-            {drafts.map((d: Draft) => (
-              <tr key={d.id} className="border-t">
-                <td className="p-2 align-top">
-                  <label className="sr-only" htmlFor={`sel-${d.id}`}>Select</label>
-                  <input id={`sel-${d.id}`} aria-label={`Select ${d.contactEmail}`} type="checkbox" checked={!!selected[d.id]} onChange={(e) => setSelected((s: Record<string, boolean>) => ({ ...s, [d.id]: e.target.checked }))} />
-                </td>
-                <td className="p-2 align-top">{d.contactFirstName} {d.contactLastName}<div className="text-xs text-gray-500">{d.contactEmail}</div></td>
-                <td className="p-2 align-top">{d.contactTitle}</td>
-                <td className="p-2 align-top">{d.accountName}</td>
-                <td className="p-2 align-top w-64">
-                  <label className="sr-only" htmlFor={`sub-${d.id}`}>Subject</label>
-                  <input id={`sub-${d.id}`} aria-label="Subject" value={d.subject} onChange={(e) => updateDraftLocal(d.id, { subject: e.target.value })} className="w-full rounded border px-2 py-1" />
-                </td>
-                <td className="p-2 align-top w-[40rem]">
-                  <label className="sr-only" htmlFor={`body-${d.id}`}>Body</label>
-                  <textarea id={`body-${d.id}`} aria-label="Body" value={d.body} onChange={(e) => updateDraftLocal(d.id, { body: e.target.value })} className="h-32 w-full rounded border px-2 py-1" />
-                </td>
-                <td className="p-2 align-top">{d.status}</td>
-                <td className="p-2 align-top"><button onClick={() => saveDraft(d)} className="rounded bg-gray-800 px-3 py-1 text-white">Save</button></td>
-                <td className="p-2 align-top"><button onClick={() => removeFromSendList(d.id)} className="rounded bg-amber-600 px-3 py-1 text-white hover:bg-amber-700">Remove</button></td>
-              </tr>
+
+      {/* List */}
+      <div className="space-y-2">
+        {loading && (
+          <div className="space-y-2">
+            {Array.from({ length: 6 }).map((_, i) => (
+              <div key={i} className="h-28 animate-pulse rounded-2xl border border-slate-200 bg-white/60 p-3 shadow-sm">
+                <div className="h-4 w-1/3 rounded bg-slate-200"/>
+                <div className="mt-2 h-3 w-1/2 rounded bg-slate-200"/>
+                <div className="mt-4 h-16 rounded bg-slate-100"/>
+              </div>
             ))}
-          </tbody>
-        </table>
+          </div>
+        )}
+        {filtered.map((d) => {
+          const checked = !!selected[d.id];
+          const name = [d.contactFirstName, d.contactLastName].filter(Boolean).join(" ");
+          return (
+            <div key={d.id} className="rounded-2xl border border-slate-200 bg-white p-3 shadow-sm">
+              <div className="flex items-start gap-3">
+                <input
+                  type="checkbox"
+                  checked={checked}
+                  onChange={(e) => setSelected((s) => ({ ...s, [d.id]: e.target.checked }))}
+                  className="mt-1 h-5 w-5 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
+                  aria-label={`Select ${d.contactEmail}`}
+                />
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-center justify-between">
+                    <div className="min-w-0">
+                      <div className="truncate text-[15px] font-semibold leading-5">{name || d.contactEmail}</div>
+                      <div className="truncate text-xs text-slate-500">{[d.contactTitle, d.accountName].filter(Boolean).join(" · ")}</div>
+                    </div>
+                    <span className="shrink-0 rounded-full bg-slate-100 px-2 py-0.5 text-xs text-slate-600 capitalize">{d.status}</span>
+                  </div>
+
+                  <div className="mt-2">
+                    <input
+                      value={d.subject}
+                      onChange={(e) => updateDraftLocal(d.id, { subject: e.target.value })}
+                      className="w-full truncate rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-[15px] font-medium focus:border-blue-500 focus:bg-white"
+                      aria-label="Subject"
+                    />
+                    <textarea
+                      value={d.body}
+                      onChange={(e) => updateDraftLocal(d.id, { body: e.target.value })}
+                      className="mt-2 w-full rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm leading-5 text-slate-700 focus:border-blue-500 focus:bg-white"
+                      rows={4}
+                      aria-label="Body"
+                    />
+                  </div>
+
+                  <div className="mt-2 flex items-center gap-2">
+                    <button onClick={() => saveDraft(d)} className="rounded-full bg-slate-900 px-3 py-1.5 text-xs font-medium text-white shadow active:scale-[.98]">Save</button>
+                    <button onClick={() => removeFromSendList(d.id)} className="rounded-full bg-amber-600 px-3 py-1.5 text-xs font-medium text-white shadow active:scale-[.98]">Remove</button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          );
+        })}
       </div>
-      <button onClick={sendSelected} className="rounded bg-green-600 px-4 py-2 text-white hover:bg-green-700">Send Selected</button>
     </main>
   );
 }

@@ -63,12 +63,41 @@ export async function POST(req: NextRequest) {
       return first;
     }
 
+    // Remove any signature/sign-off the model might add; we append our own footer later
+    function stripSignature(text: string): string {
+      if (!text) return text;
+      const normalized = text.replace(/\r\n/g, "\n");
+      const lines = normalized.split("\n");
+      const signoff = /^(best(?: regards| wishes)?|regards|kind regards|thanks|thank you|sincerely|cheers|warmly|all the best|many thanks)\b[\s,!.]*$/i;
+      const divider = /^[-–—]{2,}\s*$/;
+      let cutAt = -1;
+      // Look back up to last 8 lines for a sign-off starter or divider
+      for (let i = lines.length - 1; i >= Math.max(0, lines.length - 8); i--) {
+        const l = lines[i].trim();
+        if (!l) continue; // allow trailing blanks
+        if (divider.test(l) || signoff.test(l)) {
+          cutAt = i;
+          break;
+        }
+      }
+      const kept = cutAt >= 0 ? lines.slice(0, cutAt) : lines;
+      // Trim trailing blank lines
+      while (kept.length && kept[kept.length - 1].trim() === "") kept.pop();
+      return kept.join("\n");
+    }
+
     const results: any[] = [];
     for (const c of contacts) {
-      const prompt = `You are an expert SDR. Write a short, personalized cold email. Style: ${emailType}.
-Return a strict single-line JSON object ONLY, no code fences, no extra text. Keys: subject, body.
-Example: {"subject":"...","body":"..."}
-Contact:
+      const prompt = `You are an expert SDR. Write a short, natural-sounding cold email designed to start a conversation and book a sales call.
+      Make it professional, warm, and tailored to the person’s role and the company’s likely needs.
+      Focus on referencing the company or industry context instead of being generic.
+
+      Style: ${emailType}.
+      Important: Do NOT include any footer or signature in the body. Do not add lines like "Best regards", "Sincerely", names, titles, phone numbers, or email addresses. Our app will append a footer/signature automatically.
+      Only include the greeting and the message content/CTA; end the email without any sign-off block.
+      Return a strict single-line JSON object ONLY, no code fences, no extra text. Keys: subject, body.
+      Example: {"subject":"...","body":"..."}
+      Contact:
 First Name: ${toStrOrUndef(c.firstName) || ""}
 Last Name: ${toStrOrUndef(c.lastName) || ""}
 Title: ${toStrOrUndef(c.title) || ""}
@@ -87,8 +116,9 @@ ${instructions ? `Extra instructions: ${instructions}` : ""}`;
         });
 
         const text = (resp as any).output_text || "{}";
-        let json = tryParseJsonBlock(text) || { subject: "", body: text };
-        if (!json.subject) json.subject = deriveSubjectFromBody(json.body);
+  let json = tryParseJsonBlock(text) || { subject: "", body: text };
+  const cleanedBody = stripSignature(json.body || "");
+  if (!json.subject) json.subject = deriveSubjectFromBody(cleanedBody);
 
         // Append footer if provided; if it looks like HTML (<...>), keep as-is; otherwise append as plain text separated by two newlines.
         const withFooter = (content: string) => {
@@ -119,8 +149,8 @@ ${instructions ? `Extra instructions: ${instructions}` : ""}`;
             mobileNumber: toStrOrUndef(c.mobileNumber),
             emailType,
             instructions,
-            subject: json.subject || deriveSubjectFromBody(json.body),
-            body: withFooter(json.body || ""),
+            subject: json.subject || deriveSubjectFromBody(cleanedBody),
+            body: withFooter(cleanedBody),
           },
         });
         results.push(draft);

@@ -10,6 +10,7 @@ export default function SettingsPage() {
   const [footerMode, setFooterMode] = useState<"none" | "custom">("none");
   const [customFooter, setCustomFooter] = useState("");
   const [contacts, setContacts] = useState<any[]>([]);
+  const [generating, setGenerating] = useState(false);
   const router = useRouter();
 
   useEffect(() => {
@@ -33,37 +34,42 @@ export default function SettingsPage() {
 
   async function handleGenerate() {
     if (!contacts.length) return alert("No contacts parsed. Go back to upload.");
-  const footer = footerMode === "custom" ? customFooter : "";
-    const res = await fetch("/api/generate", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ contacts, emailType, instructions, footer }),
-    });
-    if (!res.ok) {
-      const text = await res.text();
-      return alert(text || "Failed to generate drafts");
-    }
-    let data: any = null;
+    setGenerating(true);
+    const footer = footerMode === "custom" ? customFooter : "";
     try {
-      data = await res.json();
-    } catch {
-      return alert("Failed to parse response from server");
+      const res = await fetch("/api/generate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ contacts, emailType, instructions, footer }),
+      });
+      if (!res.ok) {
+        const text = await res.text();
+        return alert(text || "Failed to generate drafts");
+      }
+      let data: any = null;
+      try {
+        data = await res.json();
+      } catch {
+        return alert("Failed to parse response from server");
+      }
+      if (data?.error) return alert(data.error);
+      router.push("/drafts");
+    } finally {
+      setGenerating(false);
     }
-    if (data?.error) return alert(data.error);
-    router.push("/drafts");
   }
 
   return (
-    <main className="space-y-6">
-      <h2 className="text-lg font-semibold">Email settings</h2>
-      <div className="space-y-4 rounded border bg-white p-4">
+    <main className="mx-auto w-full max-w-3xl space-y-6 px-3">
+      <h2 className="text-xl font-semibold tracking-tight">Email settings</h2>
+      <div className="space-y-4 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
         <div>
           <label htmlFor="emailType" className="mb-1 block text-sm font-medium">Email Type</label>
           <select
             id="emailType"
             value={emailType}
             onChange={(e) => setEmailType(e.target.value as EmailType)}
-            className="w-full rounded border px-3 py-2"
+            className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm"
           >
             <option>Direct</option>
             <option>Consultative</option>
@@ -77,7 +83,7 @@ export default function SettingsPage() {
             value={instructions}
             onChange={(e) => setInstructions(e.target.value)}
             rows={5}
-            className="w-full rounded border px-3 py-2"
+            className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm"
             placeholder="Add context, value props, or CTA preferences"
           />
         </div>
@@ -97,14 +103,14 @@ export default function SettingsPage() {
                 value={customFooter}
                 onChange={(e) => setCustomFooter(e.target.value)}
                 rows={4}
-                className="w-full rounded border px-3 py-2"
+                className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm"
                 placeholder={"e.g.\nBest,\nFranco Presta\nFounder | SIQStack\n630-555-1234"}
               />
             )}
           </div>
         </div>
-        <button onClick={handleGenerate} className="rounded bg-blue-600 px-4 py-2 text-white hover:bg-blue-700">
-          Generate drafts
+        <button disabled={generating} onClick={handleGenerate} className={`rounded-full px-4 py-2 text-white shadow ${generating ? "bg-blue-400" : "bg-blue-600 hover:bg-blue-700"}`}>
+          {generating ? "Generating…" : "Generate drafts"}
         </button>
       </div>
     </main>

@@ -37,7 +37,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Missing access token. Enable 'Send from my mailbox' to grant Mail.Send." }, { status: 403 });
   }
 
-  const results: Array<{ id: string; status: string; error?: string; name?: string; email?: string }> = [];
+  const results: Array<{ id: string; status: string; error?: string; name?: string; email?: string; lastEmailedAt?: string }> = [];
   let used = sentCountToday;
   for (const d of drafts) {
     const contactName = [d.contactFirstName, d.contactLastName].filter(Boolean).join(" ").trim();
@@ -63,7 +63,7 @@ export async function POST(req: NextRequest) {
       orderBy: { createdAt: "desc" },
     });
     if (recentlyEmailed) {
-      results.push({ id: d.id, status: "skipped", error: "Suppressed: emailed within 30 days", name: contactName || undefined, email: d.contactEmail });
+      results.push({ id: d.id, status: "skipped", error: "Suppressed: emailed within 30 days", name: contactName || undefined, email: d.contactEmail, lastEmailedAt: recentlyEmailed.createdAt.toISOString() });
       continue;
     }
     try {
@@ -138,8 +138,18 @@ export async function POST(req: NextRequest) {
         },
       });
       await prisma.draft.update({ where: { id: d.id }, data: { status: "sent", sentAt: new Date() } });
-      results.push({ id: d.id, status: "sent", name: contactName || undefined, email: d.contactEmail });
+      results.push({ id: d.id, status: "sent", name: contactName || undefined, email: d.contactEmail, lastEmailedAt: new Date().toISOString() });
     } catch (e: any) {
+      // Find last sent time if any (for display)
+      const lastSent = await prisma.emailLog.findFirst({
+        where: {
+          // @ts-ignore id augmented
+          userId: session.user.id,
+          toEmail: d.contactEmail,
+          status: "sent",
+        },
+        orderBy: { createdAt: "desc" },
+      });
       await prisma.emailLog.create({
         data: {
           // @ts-ignore id augmented
@@ -152,7 +162,7 @@ export async function POST(req: NextRequest) {
         },
       });
       await prisma.draft.update({ where: { id: d.id }, data: { status: "failed" } });
-      results.push({ id: d.id, status: "failed", error: e?.message || "unknown", name: contactName || undefined, email: d.contactEmail });
+      results.push({ id: d.id, status: "failed", error: e?.message || "unknown", name: contactName || undefined, email: d.contactEmail, lastEmailedAt: lastSent?.createdAt?.toISOString() });
     }
   }
 
