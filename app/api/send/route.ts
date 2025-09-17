@@ -37,7 +37,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Missing access token. Enable 'Send from my mailbox' to grant Mail.Send." }, { status: 403 });
   }
 
-  const results: Array<{ id: string; status: string; error?: string; name?: string; email?: string; lastEmailedAt?: string }> = [];
+  const results: Array<{ id: string; status: string; error?: string; name?: string; email?: string; lastEmailedAt?: string; suppressionUntil?: string }> = [];
   let used = sentCountToday;
   for (const d of drafts) {
     const contactName = [d.contactFirstName, d.contactLastName].filter(Boolean).join(" ").trim();
@@ -49,21 +49,37 @@ export async function POST(req: NextRequest) {
       results.push({ id: d.id, status: "failed", error: "Invalid email", name: contactName || undefined, email: d.contactEmail });
       continue;
     }
-    // 30-day suppression: skip if emailed in last 30 days
-    const thirtyDaysAgo = new Date();
-    thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
-    const recentlyEmailed = await prisma.emailLog.findFirst({
+    // Suppression check: skip if there is a non-expired suppression for this recipient
+    const suppression = await prisma.suppression.findUnique({
       where: {
-        // @ts-ignore id augmented
-        userId: session.user.id,
-        toEmail: d.contactEmail,
-        status: "sent",
-        createdAt: { gte: thirtyDaysAgo },
+        userId_toEmail: {
+          // @ts-ignore id augmented
+          userId: session.user.id,
+          toEmail: d.contactEmail,
+        },
       },
-      orderBy: { createdAt: "desc" },
     });
-    if (recentlyEmailed) {
-      results.push({ id: d.id, status: "skipped", error: "Suppressed: emailed within 30 days", name: contactName || undefined, email: d.contactEmail, lastEmailedAt: recentlyEmailed.createdAt.toISOString() });
+    const now = new Date();
+    if (suppression && suppression.expiresAt > now) {
+      // For display, also fetch last sent time if any
+      const lastSent = await prisma.emailLog.findFirst({
+        where: {
+          // @ts-ignore id augmented
+          userId: session.user.id,
+          toEmail: d.contactEmail,
+          status: "sent",
+        },
+        orderBy: { createdAt: "desc" },
+      });
+      results.push({
+        id: d.id,
+        status: "skipped",
+        error: "Suppressed by rule",
+        name: contactName || undefined,
+        email: d.contactEmail,
+        lastEmailedAt: lastSent?.createdAt?.toISOString(),
+        suppressionUntil: suppression.expiresAt.toISOString(),
+      });
       continue;
     }
     try {
@@ -137,8 +153,29 @@ export async function POST(req: NextRequest) {
           status: "sent",
         },
       });
-      await prisma.draft.update({ where: { id: d.id }, data: { status: "sent", sentAt: new Date() } });
-      results.push({ id: d.id, status: "sent", name: contactName || undefined, email: d.contactEmail, lastEmailedAt: new Date().toISOString() });
+      // Delete the draft immediately after successful send
+      try {
+        await prisma.draft.delete({ where: { id: d.id } });
+      } catch {}
+      // Upsert suppression for 30 days from now
+      const expiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
+      await prisma.suppression.upsert({
+        where: {
+          userId_toEmail: {
+            // @ts-ignore id augmented
+            userId: session.user.id,
+            toEmail: d.contactEmail,
+          },
+        },
+        create: {
+          // @ts-ignore id augmented
+          userId: session.user.id,
+          toEmail: d.contactEmail,
+          expiresAt,
+        },
+        update: { expiresAt },
+      });
+      results.push({ id: d.id, status: "sent", name: contactName || undefined, email: d.contactEmail, lastEmailedAt: new Date().toISOString(), suppressionUntil: expiresAt.toISOString() });
     } catch (e: any) {
       // Find last sent time if any (for display)
       const lastSent = await prisma.emailLog.findFirst({

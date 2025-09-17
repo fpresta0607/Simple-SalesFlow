@@ -43,6 +43,28 @@
 			"command": "npx prisma migrate dev -n add_ext_expires_in_to_account",
 			"isBackground": false,
 			"group": "build"
+		},
+		{
+			"label": "Prisma generate + push",
+			"type": "shell",
+			"command": "npx prisma generate && npx prisma db push",
+			"args": [],
+			"isBackground": false,
+			"problemMatcher": [
+				"$tsc"
+			],
+			"group": "build"
+		},
+		{
+			"label": "Prisma generate + push (PowerShell)",
+			"type": "shell",
+			"command": "npx prisma generate; npx prisma db push",
+			"args": [],
+			"isBackground": false,
+			"problemMatcher": [
+				"$tsc"
+			],
+			"group": "build"
 		}
 	]
 }

@@ -1,8 +1,8 @@
 "use client";
-import { useEffect, useMemo } from "react";
+import { Suspense, useEffect, useMemo } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 
-export default function SentPage() {
+function SentContent() {
   const params = useSearchParams();
   const router = useRouter();
   const resultsParam = params.get("results");
@@ -17,7 +17,6 @@ export default function SentPage() {
 
   useEffect(() => {
     if (!resultsParam) {
-      // if navigated directly, go back to drafts
       router.replace("/drafts");
     }
   }, [resultsParam, router]);
@@ -63,5 +62,23 @@ export default function SentPage() {
         <button onClick={() => router.push("/drafts")} className="rounded-full bg-gray-600 px-3 py-1.5 text-white shadow">Back to drafts</button>
       </div>
     </main>
+  );
+}
+
+export default function SentPage() {
+  return (
+    <Suspense fallback={
+      <main className="mx-auto w-full max-w-5xl space-y-6 px-3">
+        <h2 className="text-xl font-semibold tracking-tight">Send complete</h2>
+        <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+          <div className="inline-flex items-center gap-2 text-sm text-slate-600">
+            <span className="h-2 w-2 animate-pulse rounded-full bg-slate-500" />
+            Loading results…
+          </div>
+        </div>
+      </main>
+    }>
+      <SentContent />
+    </Suspense>
   );
 }
