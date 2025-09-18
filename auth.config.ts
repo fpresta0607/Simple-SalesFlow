@@ -4,7 +4,14 @@ import { PrismaAdapter } from "@next-auth/prisma-adapter";
 import { prisma } from "@/lib/prisma";
 
 export const authOptions: NextAuthOptions = {
+  
   adapter: PrismaAdapter(prisma),
+  debug: false,
+  logger: {
+    error: (...args) => console.error("[next-auth][error]", ...args),
+    warn: (...args) => console.warn("[next-auth][warn]", ...args),
+    debug: (...args) => console.log("[next-auth][debug]", ...args),
+  },
   providers: [
     AzureADProvider({
       tenantId: "common", // multi-tenant
@@ -12,8 +19,8 @@ export const authOptions: NextAuthOptions = {
       clientSecret: process.env.AZURE_AD_CLIENT_SECRET!,
       authorization: {
         params: {
-          // Request Mail.Send by default so app can send immediately
-          scope: "openid profile email offline_access User.Read Mail.Send",
+          // Minimal scopes to avoid admin consent issues; add Mail.Send later after consent
+          scope: "openid profile email offline_access User.Read",
           // prompt: "consent", // uncomment to always force consent during tests
         },
       },
@@ -44,9 +51,14 @@ export const authOptions: NextAuthOptions = {
       (session as any).tenantId = (token as any).tenantId;
       return session;
     },
-    async redirect({ baseUrl }) {
-      // Always send users to the main flow after auth
-      return `${baseUrl}/upload`;
+    async redirect({ url, baseUrl }) {
+      // Preserve provided callbackUrl when safe (relative or same-origin); fallback to root
+      try {
+        if (url.startsWith("/")) return url;
+        const u = new URL(url);
+        if (u.origin === baseUrl) return u.pathname + u.search + u.hash;
+      } catch {}
+      return "/";
     },
   },
 };

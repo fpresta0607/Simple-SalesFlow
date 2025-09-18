@@ -88,27 +88,32 @@ export async function POST(req: NextRequest) {
 
     const results: any[] = [];
     for (const c of contacts) {
-      const prompt = `You are an expert SDR. Write a short, natural-sounding cold email designed to start a conversation and book a sales call.
-      Make it professional, warm, and tailored to the person’s role and the company’s likely needs.
-      Focus on referencing the company or industry context instead of being generic.
+      const prompt = `You are an expert SDR representing SIQstack, a software development company. 
+SIQstack helps businesses by building:
+→ Custom Apps and SaaS products
+→ Automation & AI tools to streamline workflows
+→ Websites and online stores that convert
+→ Digital management solutions to run operations smoothly
 
-      Style: ${emailType}.
-      Important: Do NOT include any footer or signature in the body. Do not add lines like "Best regards", "Sincerely", names, titles, phone numbers, or email addresses. Our app will append a footer/signature automatically.
-      Only include the greeting and the message content/CTA; end the email without any sign-off block.
-      Return a strict single-line JSON object ONLY, no code fences, no extra text. Keys: subject, body.
-      Example: {"subject":"...","body":"..."}
-      Contact:
+Write a short, natural-sounding cold email designed to start a conversation and book a sales call. 
+Make it professional, warm, and tailored to the person’s role and the company’s likely needs. 
+Focus on referencing the company or industry context instead of being generic, while tying back to how SIQstack’s services can help. 
+
+Style: ${emailType}.
+Important: Do NOT include any footer or signature in the body. Do not add lines like "Best regards", "Sincerely", names, titles, phone numbers, or email addresses. Our app will append a footer/signature automatically. 
+Only include the greeting and the message content/CTA; end the email without any sign-off block. 
+
+Return a strict single-line JSON object ONLY, no code fences, no extra text. Keys: subject, body. 
+Example: {"subject":"...","body":"..."} 
+
+Contact:
 First Name: ${toStrOrUndef(c.firstName) || ""}
 Last Name: ${toStrOrUndef(c.lastName) || ""}
 Title: ${toStrOrUndef(c.title) || ""}
 Company: ${toStrOrUndef(c.accountName) || ""}
 City: ${toStrOrUndef(c.mailingCity) || ""}
-Street: ${toStrOrUndef(c.mailingStreet) || ""}
-Zip: ${toStrOrUndef(c.mailingZip) || ""}
-Business Phone: ${toStrOrUndef(c.businessPhone) || ""}
-Mobile: ${toStrOrUndef(c.mobileNumber) || ""}
-Email: ${c.email}
-${instructions ? `Extra instructions: ${instructions}` : ""}`;
+${instructions ? `Extra instructions: ${instructions}` : ""}`
+
       try {
         const resp = await openai.responses.create({
           model: "gpt-4o-mini",

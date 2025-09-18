@@ -1,45 +1,36 @@
-export default function HomePage({ searchParams }: { searchParams?: { error?: string } }) {
+import { getSession } from "@/lib/auth";
+import { redirect } from "next/navigation";
+
+export default async function HomePage({ searchParams }: { searchParams?: { error?: string } }) {
+  const session = await getSession();
+  if (!session) redirect("/login");
   const error = searchParams?.error;
   return (
     <main className="mx-auto w-full max-w-6xl space-y-8 px-3">
-      {/* Hero */}
-      <section className="rounded-2xl border border-slate-200 bg-white p-8 shadow-sm">
-        {error && (
-          <div className="mb-4 rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-800">
-            There was a problem signing in. <a href="/api/auth/signin/azure-ad?callbackUrl=%2Fupload" className="underline">Try again</a> or <a className="underline" href="mailto:support@example.com">Contact support</a>.
+      {/* Header */}
+      <section className="relative overflow-hidden rounded-2xl border border-slate-200 bg-white p-8 shadow-sm soft-gradient animate-fade-in">
+        <div className="relative z-10">
+          <h1 className="mb-2 text-2xl font-semibold tracking-tight animate-slide-up">Welcome back</h1>
+          <p className="text-gray-700 animate-slide-up-delayed">Ready to create and send more personalized emails?</p>
+          <div className="mt-4 flex gap-3 animate-slide-up-delayed-2">
+            <a href="/upload" className="inline-flex items-center gap-2 rounded-full bg-blue-600 px-4 py-2 text-white shadow hover:bg-blue-700 hover-pulse-subtle">Upload new list</a>
+            <a href="/drafts" className="inline-flex items-center gap-2 rounded-full bg-slate-900 px-4 py-2 text-white shadow hover:bg-slate-800">Review drafts</a>
           </div>
-        )}
-        <h1 className="mb-3 text-3xl font-semibold tracking-tight">Upload your contacts. Get personalized emails in minutes.</h1>
-        <p className="mb-6 text-gray-700">AI generates subject & body. Review, select, and send.</p>
-        <div className="flex flex-wrap items-center gap-3">
-          <a href="/api/auth/signin/azure-ad?callbackUrl=%2Fupload" className="inline-flex items-center gap-2 rounded-full bg-blue-600 px-4 py-2 text-white shadow hover:bg-blue-700">
-            <span className="inline-block" aria-hidden>
-              {/* Microsoft logo */}
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                <rect x="2" y="2" width="9" height="9" fill="#F25022"/>
-                <rect x="13" y="2" width="9" height="9" fill="#7FBA00"/>
-                <rect x="2" y="13" width="9" height="9" fill="#00A4EF"/>
-                <rect x="13" y="13" width="9" height="9" fill="#FFB900"/>
-              </svg>
-            </span>
-            <span>Sign in with Microsoft</span>
-          </a>
-          
         </div>
       </section>
 
       {/* How it works */}
-      <section id="how-it-works" className="rounded-2xl border border-slate-200 bg-white p-8 shadow-sm">
+      <section id="how-it-works" className="rounded-2xl border border-slate-200 bg-white p-8 shadow-sm animate-fade-in">
         <div className="grid gap-6 sm:grid-cols-3">
-          <div>
+          <div className="transition-transform hover:-translate-y-0.5">
             <div className="mb-2 text-base font-semibold">Upload Excel/CSV</div>
             <p className="text-sm text-gray-600">Import contacts directly. We’ll parse the essentials for you.</p>
           </div>
-          <div>
+          <div className="transition-transform hover:-translate-y-0.5">
             <div className="mb-2 text-base font-semibold">Review drafts</div>
             <p className="text-sm text-gray-600">Skim and tweak subjects and bodies before sending.</p>
           </div>
-          <div>
+          <div className="transition-transform hover:-translate-y-0.5">
             <div className="mb-2 text-base font-semibold">Send from your mailbox</div>
             <p className="text-sm text-gray-600">We send via Microsoft Graph, so mail lands in your Sent Items.</p>
           </div>
@@ -47,7 +38,7 @@ export default function HomePage({ searchParams }: { searchParams?: { error?: st
       </section>
 
       {/* FAQ mini */}
-      <section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+      <section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm animate-fade-in">
         <div className="text-sm">
           <div className="font-medium">Will this send from my company email?</div>
           <p className="text-gray-700">Yes, via Microsoft Graph after consent. Messages are sent as you and saved to Sent Items.</p>

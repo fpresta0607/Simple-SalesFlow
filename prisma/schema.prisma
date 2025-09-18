@@ -103,14 +103,38 @@ model EmailLog {
   draft Draft? @relation(fields: [draftId], references: [id], onDelete: SetNull)
 }
 
+// Lightweight record of successfully sent emails (providerMessageId optional)
+model SentEmailLog {
+  id                String   @id @default(cuid())
+  userId            String
+  toEmail           String
+  subject           String
+  providerMessageId String?
+  createdAt         DateTime @default(now())
+
+  @@index([userId, toEmail])
+}
+
+
+enum SuppressionScope {
+  user
+  domain
+  global
+}
+
 model Suppression {
   id        String   @id @default(cuid())
-  userId    String
-  toEmail   String
-  expiresAt DateTime
+  scope     SuppressionScope
+  key       String // userId, domain, or global
+  email     String // always lowercase
+  reason    String   @default("cooldown")
+  expiresAt DateTime?
   createdAt DateTime @default(now())
 
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  // For per-user suppression, keep relation for compatibility
+  userId    String?
+  user      User? @relation(fields: [userId], references: [id], onDelete: Cascade)
 
-  @@unique([userId, toEmail])
+  @@index([scope, key])
+  @@unique([scope, key, email], name: "scope_key_email")
 }

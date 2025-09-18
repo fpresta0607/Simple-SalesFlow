@@ -19,6 +19,7 @@ export default function DraftsPage() {
   const [query, setQuery] = useState("");
   const [loading, setLoading] = useState(true);
   const [sending, setSending] = useState(false);
+  const [removing, setRemoving] = useState(false);
   const selectedCount = drafts.reduce((acc, d) => acc + (selected[d.id] ? 1 : 0), 0);
 
   async function fetchDrafts() {
@@ -105,13 +106,44 @@ export default function DraftsPage() {
     }
   }
 
+  async function removeAllSelected() {
+    const ids = drafts.filter((d: Draft) => selected[d.id]).map((d: Draft) => d.id);
+    if (ids.length === 0) return alert("Select at least one draft to remove");
+    setRemoving(true);
+    const failed: string[] = [];
+    try {
+      for (const id of ids) {
+        try {
+          const res = await fetch(`/api/drafts/${id}`, { method: "DELETE" });
+          if (!res.ok) failed.push(id);
+        } catch {
+          failed.push(id);
+        }
+      }
+      const success = new Set(ids.filter((id) => !failed.includes(id)));
+      if (success.size > 0) {
+        setDrafts((ds) => ds.filter((d) => !success.has(d.id)));
+        setSelected((s) => {
+          const next = { ...s } as Record<string, boolean>;
+          for (const id of success) delete next[id];
+          return next;
+        });
+      }
+      if (failed.length > 0) {
+        alert(`Failed to delete ${failed.length} draft(s). Please retry.`);
+      }
+    } finally {
+      setRemoving(false);
+    }
+  }
+
   return (
     <main className="mx-auto w-full max-w-none space-y-4 px-1 pb-6 lg:px-2">
       <h2 className="pt-2 text-xl font-semibold tracking-tight">Review drafts</h2>
       <p className="text-sm text-slate-500">Generated drafts. Edit before sending.</p>
 
       {/* Toolbar */}
-      <div className="sticky top-0 z-10 -mx-1 mb-2 bg-[#f5f5f7]/80 px-1 py-2 backdrop-blur supports-[backdrop-filter]:bg-[#f5f5f7]/60 lg:-mx-2 lg:px-2">
+  <div className="sticky top-14 z-10 -mx-1 mb-2 bg-[#f5f5f7]/80 px-1 py-2 backdrop-blur supports-[backdrop-filter]:bg-[#f5f5f7]/60 lg:-mx-2 lg:px-2">
         <div className="flex items-center gap-2">
           <div className="relative flex-1">
             <input
@@ -129,6 +161,9 @@ export default function DraftsPage() {
             setSelected(next);
           }} className="rounded-full bg-slate-900 px-3 py-2 text-xs font-medium text-white shadow active:scale-[.98]">Select All</button>
           <button onClick={clearSendList} className="rounded-full bg-slate-200 px-3 py-2 text-xs font-medium text-slate-900 shadow active:scale-[.98]">Clear</button>
+          <button disabled={removing} onClick={removeAllSelected} className={`rounded-full px-3 py-2 text-xs font-medium text-white shadow active:scale-[.98] ${removing ? "bg-red-400" : "bg-red-600 hover:bg-red-700"}`}>
+            {removing ? "Removing…" : `Remove ${selectedCount > 0 ? `${selectedCount} Selected` : "Selected"}`}
+          </button>
           <button disabled={sending} onClick={sendSelected} className={`rounded-full px-3 py-2 text-xs font-medium text-white shadow active:scale-[.98] ${sending ? "bg-blue-400" : "bg-blue-600"}`}>
             {sending ? "Sending…" : `Send ${selectedCount > 0 ? `${selectedCount} Selected` : "Selected"}`}
           </button>
