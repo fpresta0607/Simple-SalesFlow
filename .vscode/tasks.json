@@ -65,6 +65,41 @@
 				"$tsc"
 			],
 			"group": "build"
+		},
+		{
+			"label": "Seed SentEmailLog from suppressions",
+			"type": "shell",
+			"command": "node",
+			"args": [
+				"scripts/seed-sent-logs-from-suppressions.js"
+			],
+			"isBackground": false,
+			"group": "build"
+		},
+		{
+			"label": "Next build",
+			"type": "shell",
+			"command": "npm",
+			"args": [
+				"run",
+				"build"
+			],
+			"problemMatcher": [
+				"$tsc"
+			],
+			"group": "build"
+		},
+		{
+			"label": "Prisma generate + push (Copilot)",
+			"type": "shell",
+			"command": "npx",
+			"args": [
+				"-y",
+				"shx",
+				"echo",
+				"skip"
+			],
+			"group": "build"
 		}
 	]
 }

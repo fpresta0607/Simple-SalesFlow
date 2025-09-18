@@ -38,6 +38,9 @@ export async function POST(req: NextRequest) {
   }
 
   const results: Array<{ id: string; status: string; error?: string; name?: string; email?: string; lastEmailedAt?: string; suppressionUntil?: string }> = [];
+  const senderEmail: string | undefined = (session.user as any)?.email || undefined;
+  const senderDomain: string | undefined = senderEmail?.includes("@") ? senderEmail.split("@")[1].toLowerCase() : undefined;
+  const GLOBAL_SUPPRESS_KEY = "all"; // key used for global scope entries
   let used = sentCountToday;
   for (const d of drafts) {
     const contactName = [d.contactFirstName, d.contactLastName].filter(Boolean).join(" ").trim();
@@ -49,24 +52,27 @@ export async function POST(req: NextRequest) {
       results.push({ id: d.id, status: "failed", error: "Invalid email", name: contactName || undefined, email: d.contactEmail });
       continue;
     }
-    // Suppression check: skip if there is a non-expired suppression for this recipient
-    const suppression = await prisma.suppression.findUnique({
-      where: {
-        userId_toEmail: {
-          // @ts-ignore id augmented
-          userId: session.user.id,
-          toEmail: d.contactEmail,
-        },
-      },
-    });
+    // Normalize recipient email to lowercase for suppression matching
+    const recipient = d.contactEmail.toLowerCase();
+    // Suppression check: block if active at user, domain, or global scope
     const now = new Date();
-    if (suppression && suppression.expiresAt > now) {
+    const scopeFilters: any[] = [
+      { scope: "user", key: (session.user as any).id },
+    ];
+    if (senderDomain) scopeFilters.push({ scope: "domain", key: senderDomain });
+    scopeFilters.push({ scope: "global", key: GLOBAL_SUPPRESS_KEY });
+    // Find any suppression at user/domain/global for this email; filter expiration in JS
+    const suppression = await (prisma as any).suppression.findFirst({
+      where: { email: recipient, OR: scopeFilters },
+    });
+    const isSuppressed = !!suppression && (!suppression.expiresAt || new Date(suppression.expiresAt) > now);
+    if (isSuppressed) {
       // For display, also fetch last sent time if any
       const lastSent = await prisma.emailLog.findFirst({
         where: {
           // @ts-ignore id augmented
           userId: session.user.id,
-          toEmail: d.contactEmail,
+          toEmail: recipient,
           status: "sent",
         },
         orderBy: { createdAt: "desc" },
@@ -76,9 +82,9 @@ export async function POST(req: NextRequest) {
         status: "skipped",
         error: "Suppressed by rule",
         name: contactName || undefined,
-        email: d.contactEmail,
+        email: recipient,
         lastEmailedAt: lastSent?.createdAt?.toISOString(),
-        suppressionUntil: suppression.expiresAt.toISOString(),
+        suppressionUntil: suppression.expiresAt ? suppression.expiresAt.toISOString() : undefined,
       });
       continue;
     }
@@ -91,7 +97,7 @@ export async function POST(req: NextRequest) {
             content: d.body.replace(/\n/g, "<br/>")
           },
           toRecipients: [
-            { emailAddress: { address: d.contactEmail } }
+            { emailAddress: { address: recipient } }
           ],
         },
         saveToSentItems: true,
@@ -143,46 +149,42 @@ export async function POST(req: NextRequest) {
         throw new Error(`Graph error ${graphRes.status}: ${errText}`);
       }
       used++;
-      await prisma.emailLog.create({
-        data: {
-          // @ts-ignore id augmented
-          userId: session.user.id,
-          draftId: d.id,
-          toEmail: d.contactEmail,
-          subject: d.subject,
-          status: "sent",
-        },
-      });
-      // Delete the draft immediately after successful send
-      try {
-        await prisma.draft.delete({ where: { id: d.id } });
-      } catch {}
-      // Upsert suppression for 30 days from now
+      // After a successful send, perform logging, one suppression (domain-preferred), and delete the draft in a transaction
       const expiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
-      await prisma.suppression.upsert({
-        where: {
-          userId_toEmail: {
+      const suppressionOp = senderDomain
+        ? (prisma as any).suppression.upsert({
+            where: { scope_key_email: { scope: "domain", key: senderDomain, email: recipient } },
+            update: { reason: "cooldown", expiresAt },
+            create: { scope: "domain", key: senderDomain, email: recipient, reason: "cooldown", expiresAt },
+          })
+        : (prisma as any).suppression.upsert({
+            where: { scope_key_email: { scope: "user", key: (session.user as any).id, email: recipient } },
+            update: { reason: "cooldown", expiresAt },
+            create: { scope: "user", key: (session.user as any).id, email: recipient, reason: "cooldown", expiresAt },
+          });
+
+      await prisma.$transaction([
+        prisma.emailLog.create({
+          data: {
             // @ts-ignore id augmented
             userId: session.user.id,
-            toEmail: d.contactEmail,
+            draftId: d.id,
+            toEmail: recipient,
+            subject: d.subject,
+            status: "sent",
           },
-        },
-        create: {
-          // @ts-ignore id augmented
-          userId: session.user.id,
-          toEmail: d.contactEmail,
-          expiresAt,
-        },
-        update: { expiresAt },
-      });
-      results.push({ id: d.id, status: "sent", name: contactName || undefined, email: d.contactEmail, lastEmailedAt: new Date().toISOString(), suppressionUntil: expiresAt.toISOString() });
+        }),
+        suppressionOp,
+        prisma.draft.delete({ where: { id: d.id } }),
+      ]);
+      results.push({ id: d.id, status: "sent", name: contactName || undefined, email: recipient, lastEmailedAt: new Date().toISOString(), suppressionUntil: expiresAt.toISOString() });
     } catch (e: any) {
       // Find last sent time if any (for display)
       const lastSent = await prisma.emailLog.findFirst({
         where: {
           // @ts-ignore id augmented
           userId: session.user.id,
-          toEmail: d.contactEmail,
+          toEmail: d.contactEmail.toLowerCase(),
           status: "sent",
         },
         orderBy: { createdAt: "desc" },
@@ -192,7 +194,7 @@ export async function POST(req: NextRequest) {
           // @ts-ignore id augmented
           userId: session.user.id,
           draftId: d.id,
-          toEmail: d.contactEmail,
+          toEmail: d.contactEmail.toLowerCase(),
           subject: d.subject,
           status: "failed",
           error: e?.message || String(e),

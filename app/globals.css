@@ -34,3 +34,29 @@ html, body {
   outline: 2px solid rgba(59,130,246,0.6); /* blue-500 */
   outline-offset: 2px;
 }
+
+/* ---- Animations ---- */
+@keyframes fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+@keyframes slide-up {
+  from { transform: translateY(8px); opacity: 0; }
+  to { transform: translateY(0); opacity: 1; }
+}
+@keyframes pulse-subtle {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.02); }
+}
+
+/* Utility classes */
+.animate-fade-in { animation: fade-in 600ms ease-out both; }
+.animate-slide-up { animation: slide-up 500ms ease-out both; }
+.animate-slide-up-delayed { animation: slide-up 600ms ease-out both; animation-delay: 120ms; }
+.animate-slide-up-delayed-2 { animation: slide-up 700ms ease-out both; animation-delay: 240ms; }
+.hover-pulse-subtle:hover { animation: pulse-subtle 900ms ease-in-out; }
+.glass-card { -webkit-backdrop-filter: saturate(180%) blur(8px); backdrop-filter: saturate(180%) blur(8px); background: rgba(255,255,255,0.75); }
+.soft-gradient {
+  background: radial-gradient(1200px 600px at 10% -10%, rgba(59,130,246,0.12), transparent 60%),
+              radial-gradient(1200px 600px at 110% -10%, rgba(16,185,129,0.10), transparent 60%);
+}
