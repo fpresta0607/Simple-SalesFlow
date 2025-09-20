@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import * as XLSX from "xlsx";
 import { Contact } from "@/types/contacts";
+import { getServerSession } from "next-auth";
+import { authOptions } from "@/auth.config";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -10,6 +12,11 @@ function normalizeHeader(h: string) {
 }
 
 export async function POST(req: NextRequest) {
+  // Require an authenticated session for uploads
+  const session = await getServerSession(authOptions);
+  if (!session) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
   const formData = await req.formData();
   const file = formData.get("file");
   if (!file || !(file instanceof File)) {

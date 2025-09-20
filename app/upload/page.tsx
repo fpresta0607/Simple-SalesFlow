@@ -14,7 +14,18 @@ export default function UploadPage() {
     const form = new FormData();
     form.append("file", file);
     try {
-      const res = await fetch("/api/upload", { method: "POST", body: form });
+      const res = await fetch("/api/upload", {
+        method: "POST",
+        body: form,
+        // Ensure cookies/session are sent with the request
+        credentials: "include",
+      });
+      if (res.status === 401) {
+        // Not authenticated; send user to login with callback back to this page
+        const url = new URL(window.location.href);
+        window.location.href = `/login?callbackUrl=${encodeURIComponent(url.pathname + url.search)}`;
+        return;
+      }
       const data = await res.json();
       setContacts(data.contacts || []);
       if (data.contacts) localStorage.setItem("uploadedContacts", JSON.stringify(data.contacts));

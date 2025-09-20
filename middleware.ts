@@ -36,7 +36,15 @@ export async function middleware(req: NextRequest) {
   const token = await getToken({ req, secret: process.env.NEXTAUTH_SECRET });
 
   if (!token) {
-    // send to /login with callbackUrl so we can return here after auth
+    const isApi = pathname.startsWith("/api/");
+    if (isApi) {
+      // For API requests, return 401 JSON instead of redirecting so the client can handle it.
+      return new NextResponse(JSON.stringify({ error: "Unauthorized" }), {
+        status: 401,
+        headers: { "content-type": "application/json" },
+      });
+    }
+    // For page requests, redirect to /login with callbackUrl so we can return here after auth
     const url = req.nextUrl.clone();
     url.pathname = "/login";
     url.search = `?callbackUrl=${encodeURIComponent(pathname + (search || ""))}`;
