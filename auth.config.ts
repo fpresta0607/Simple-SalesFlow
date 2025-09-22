@@ -4,6 +4,8 @@ import { PrismaAdapter } from "@next-auth/prisma-adapter";
 import { prisma } from "@/lib/prisma";
 
 export const authOptions: NextAuthOptions = {
+  // Ensure consistent JWT encryption/decryption across all runtimes
+  secret: process.env.NEXTAUTH_SECRET,
   
   adapter: PrismaAdapter(prisma),
   debug: false,
